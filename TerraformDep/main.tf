@@ -115,17 +115,23 @@ resource "aws_eks_cluster" "eks_cluster" {
     ]
 }
 
+# Wait for EKS control plane to be fully available before proceeding
+resource "time_sleep" "wait_for_cluster" {
+    depends_on      = [aws_eks_cluster.eks_cluster]
+    create_duration = "30s"
+}
+
 # OIDC provider for EKS (required for IAM Roles for Service Accounts)
 data "tls_certificate" "eks" {
-    url = aws_eks_cluster.eks_cluster.identity[0].oidc[0].issuer
+    url        = aws_eks_cluster.eks_cluster.identity[0].oidc[0].issuer
+    depends_on = [time_sleep.wait_for_cluster]
 }
 
 resource "aws_iam_openid_connect_provider" "eks" {
     client_id_list  = ["sts.amazonaws.com"]
     thumbprint_list = [data.tls_certificate.eks.certificates[0].sha1_fingerprint]
     url             = aws_eks_cluster.eks_cluster.identity[0].oidc[0].issuer
-
-    depends_on = [aws_eks_cluster.eks_cluster]
+    depends_on      = [time_sleep.wait_for_cluster]
 }
 
 resource "aws_eks_node_group" "node_group" {
@@ -141,8 +147,15 @@ resource "aws_eks_node_group" "node_group" {
     depends_on = [
         aws_iam_role_policy_attachment.eks_worker_node_policy,
         aws_iam_role_policy_attachment.eks_cni_policy,
-        aws_iam_role_policy_attachment.ecr_read_only
+        aws_iam_role_policy_attachment.ecr_read_only,
+        time_sleep.wait_for_cluster
     ]
+}
+
+# Wait for nodes to be fully ready before deploying Kubernetes resources
+resource "time_sleep" "wait_for_nodes" {
+    depends_on      = [aws_eks_node_group.node_group]
+    create_duration = "60s"
 }
 
 # IAM roles for EKS
@@ -270,7 +283,7 @@ resource "kubernetes_deployment" "app" {
         }
     }
     depends_on = [
-        aws_eks_node_group.node_group
+        time_sleep.wait_for_nodes
     ]
 }
 
@@ -343,6 +356,7 @@ resource "kubernetes_service_account" "load_balancer_controller" {
             "eks.amazonaws.com/role-arn" = aws_iam_role.load_balancer_controller.arn
         }
     }
+    depends_on = [time_sleep.wait_for_nodes]
 }
 
 resource "helm_release" "load_balancer_controller" {
@@ -374,7 +388,7 @@ resource "helm_release" "load_balancer_controller" {
     }
     depends_on = [
         kubernetes_service_account.load_balancer_controller,
-        aws_eks_node_group.node_group
+        time_sleep.wait_for_nodes
     ]
 }
 
