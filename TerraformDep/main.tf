@@ -13,6 +13,10 @@ terraform {
             source  = "hashicorp/helm"
             version = "~> 2.0"
         }
+        time = {
+            source  = "hashicorp/time"
+            version = "~> 0.9"
+            }
     }
     backend "s3" {
         bucket         = "ecommerce-terraform-state-202951752028"
@@ -273,7 +277,14 @@ resource "kubernetes_service" "app_service" {
         kubernetes_deployment.app
     ]
 }
+resource "time_sleep" "wait_for_lb_controller" {
+  depends_on      = [helm_release.load_balancer_controller]
+  create_duration = "60s"
+}
 
+resource "kubernetes_service" "app_service" {
+  depends_on = [time_sleep.wait_for_lb_controller]
+}
 # AWS Load Balancer Controller
 resource "aws_iam_policy" "load_balancer_controller" {
     name        = "AWSLoadBalancerControllerIAMPolicy"
