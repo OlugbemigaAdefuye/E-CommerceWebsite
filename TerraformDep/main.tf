@@ -30,12 +30,10 @@
   # Kubernetes provider for EKS
   provider "kubernetes" {
       host                   = aws_eks_cluster.eks_cluster.endpoint
-      cluster_ca_certificate =                                                  
-  base64decode(aws_eks_cluster.eks_cluster.certificate_authority[0].data)       
+      cluster_ca_certificate = base64decode(aws_eks_cluster.eks_cluster.certificate_authority[0].data)       
       exec {                                                                    
           api_version = "client.authentication.k8s.io/v1beta1"                  
-          args        = ["eks", "get-token", "--cluster-name",                  
-  aws_eks_cluster.eks_cluster.name]                                             
+          args        = ["eks", "get-token", "--cluster-name", aws_eks_cluster.eks_cluster.name]                                             
           command     = "aws"                                                   
       }                                                                         
   }                                                               
@@ -54,8 +52,7 @@
       count                   = 2
       vpc_id                  = aws_vpc.main.id                                 
       cidr_block              = "10.0.${count.index}.0/24"
-      availability_zone       =                                                 
-  element(data.aws_availability_zones.available.names, count.index)             
+      availability_zone       = element(data.aws_availability_zones.available.names, count.index)             
       map_public_ip_on_launch = true
       tags = {                                                                  
           Name                     = "eks-public-${count.index}"                
@@ -272,6 +269,5 @@
                                                                                 
   output "load_balancer_hostname" {                                             
       description = "Load balancer hostname"                      
-      value       =
-  kubernetes_service.app_service.status[0].load_balancer[0].ingress[0].hostname
+      value       =  kubernetes_service.app_service.status[0].load_balancer[0].ingress[0].hostname
   }
